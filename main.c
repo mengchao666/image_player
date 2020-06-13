@@ -1,88 +1,99 @@
 #include <stdio.h>
-#include <unistd.h>
+#include <stdlib.h>
+#include <string.h>
+#include <png.h>
 
-#include <fb.h>
-#include <config.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <linux/fb.h>
+
+#include <display_manager.h>
+#include <formats_manager.h>
+#include <operate_manager.h>
 
 
 
-char rgb_buf[BMP_BUF_SIZE];
+/* PicPrc <format><file><size 0-10 of zoom><angle 0-360 of rotate> */
+int main(int argc, char **argv)
+{	
+	int iError;
+	float fZoomSize;
+	float fRotateAngle;
+	PT_Picture2RGB ptPicPar;
+	PT_DispOpr ptDispOpr;
+	T_PictureData tPictureData;
+	if (argc != 5){
+		printf("Usage:\n");
+		printf("%s <format><file><size 0-10 of zoom><angle 0-360 of rotate>\n", argv[0]);
+		printf("Example:%s png2rgb test.png 2.2 222.2",argv[0]);
+		return 0;
+	}
 
 
+	fZoomSize = atof(argv[3]);
+	fRotateAngle = atof( argv[4]);
+	if((fZoomSize<0||fZoomSize>10)||(fRotateAngle<0||fRotateAngle>360)){
+		printf("Usage:\n");
+		printf("%s <format><file><size 0-10 of zoom><angle 0-360 of rotate>\n", argv[0]);
+		printf("Example:%s png2rgb test.png 2.2 222.2",argv[0]);
+		return 0;
+	}
+	
+	/* 注册显示设备 */
+	iError = DisplayInit();
+	if(iError != 0){
+		printf("DisplayInit fault\n");
+		return -1;
+	}
+	/* 注册图像解析模块 */
+	iError = PicParseInit();
+	if(iError != 0){
+		printf("PicParseInit fault\n");
+		return -1;
+	}
+	/* 可能可支持多个显示设备: 选择和初始化指定的显示设备 */
+	SelectAndInitDefaultDispDev("fb");
 
-
-
-
-int main(void)
-{
-	int ret = -1;
-
-	printf("image decode player.....\n");
-
-	ret = fb_open();
-	if (ret < 0)
-	{
-		printf("fb_open error.\n");
+	ptDispOpr = GetDefaultDispDev();
+	if(ptDispOpr==NULL){
+		printf("ptDispOpr is null\n");
+		return -1;
+	}
+	ptPicPar = GetFmtOpr(argv[1]);
+	if(ptPicPar==NULL){
+		printf("convert format is not supported\n");
 		return -1;
 	}
 
-	//fb_draw_back(1024, 600, RED);
-	//fb_draw_picutre6(100, 100);
-	//fb_draw_picutre7((1024-500)/2, (600-281)/2);
-	//fb_draw_picutre9(800, 100);
+	ptDispOpr->CleanScreen(0);
 
-// 测试bmp图片显示，ok	
-//	picture.pathname = "meinv.bmp";			// 指向要显示的图片
-//	bmp_analyze(&picture);
+	iError = ptPicPar->PictureParsing(argv[2],&tPictureData);
 
-// 测试jpg图片显示
-//	display_bmp("123.bmp");
-//	sleep(3);
-//	display_jpg("meinv.jpg");
+	if(iError != 0){
+		printf("Picture Parsing is fault\n");
+		return -1;
+	}
 
-//	display_png("meinv.png");
-//	debug("-------------\n");
-
-
-	scan_image2("./image");
-//	print_images();
-//	while(1)
-//		show_images();
-
-	ts_updown();
+	iError = PicZoom(&tPictureData,fZoomSize);
+	if(iError != 0){
+		printf("PicZoom fault\n");
+		return -1;
+	}
+	iError = PicRotate(&tPictureData, fRotateAngle);
+	if(iError != 0){
+		printf("PicRotate fault\n");
+		return -1;
+	}
+	ptDispOpr->ShowPicture(&tPictureData);
 
 	
-	
-	fb_close();
-
-	
-
+	ptPicPar->PictureRelease(&tPictureData);
+	if(ptDispOpr->DeviceExit()!=0){
+		printf("display device exit fault\n");
+		return -1;
+	}
 	return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

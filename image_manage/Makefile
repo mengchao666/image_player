@@ -1,1 +1,0 @@
-obj-y += image_manager.o
